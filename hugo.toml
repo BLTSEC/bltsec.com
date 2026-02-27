@@ -8,11 +8,15 @@ pagination.pagerSize = 5
 
 [params]
   contentTypeName = "posts"
-  showMenuItems = 2
   fullWidthTheme = false
   centerTheme = true
   readMore = "Read more"
   subtitle = "Offensive Security Research & Operations"
+  description = "Offensive security research, red team techniques, custom tooling, and vulnerability writeups."
+  keywords = "offensive security, red team, penetration testing, security research, custom tooling"
+  missingContentMessage = "Nothing here. Move along."
+  missingBackButtonLabel = "Back to BLTSEC"
+  showMenuItems = 3
 
   [params.twitter]
     creator = "BLTSEC"
@@ -22,7 +26,7 @@ pagination.pagerSize = 5
   [languages.en]
     title = "BLTSEC"
     subtitle = "Offensive Security Research & Operations"
-    keywords = ""
+    keywords = "offensive security, red team, penetration testing, security research, custom tooling"
     copyright = "© 2026 BLTSEC"
     menuMore = "Show more"
     readMore = "Read more"
@@ -41,3 +45,7 @@ pagination.pagerSize = 5
         identifier = "posts"
         name = "Posts"
         url = "/posts"
+      [[languages.en.menu.main]]
+        identifier = "tags"
+        name = "Tags"
+        url = "/tags"
