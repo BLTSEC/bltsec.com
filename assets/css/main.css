@@ -511,6 +511,13 @@ iframe[src*="youtube.com"] {
   }
 }
 
+.header__subtitle {
+  font-size: calc(var(--font-size) * 0.85);
+  color: var(--foreground);
+  opacity: 0.6;
+  margin-top: 5px;
+}
+
 @media print {
   .container {
     display: initial;

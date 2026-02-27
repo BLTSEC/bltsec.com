@@ -12,6 +12,7 @@ pagination.pagerSize = 5
   fullWidthTheme = false
   centerTheme = true
   readMore = "Read more"
+  subtitle = "Offensive Security Research & Operations"
 
   [params.twitter]
     creator = "BLTSEC"
