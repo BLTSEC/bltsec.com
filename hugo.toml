@@ -11,6 +11,7 @@ pagination.pagerSize = 5
   showMenuItems = 2
   fullWidthTheme = false
   centerTheme = true
+  readMore = "Read more"
 
 [languages]
   [languages.en]
