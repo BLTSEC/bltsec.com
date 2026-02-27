@@ -13,6 +13,10 @@ pagination.pagerSize = 5
   centerTheme = true
   readMore = "Read more"
 
+  [params.twitter]
+    creator = "BLTSEC"
+    site = "BLTSEC"
+
 [languages]
   [languages.en]
     title = "BLTSEC"
