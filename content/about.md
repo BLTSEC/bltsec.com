@@ -34,5 +34,5 @@ Research, tooling notes, red team techniques, vulnerability writeups, and anythi
 
 - [GitHub](https://github.com/BLTSEC)
 - [YouTube](https://www.youtube.com/@0xBLTSEC)
-- [X](https://x.com/BLTSEC)
+- [X / Twitter](https://x.com/BLTSEC)
 - [LinkedIn](https://www.linkedin.com/in/bltsec/)
