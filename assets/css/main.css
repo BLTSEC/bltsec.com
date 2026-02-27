@@ -515,7 +515,8 @@ iframe[src*="youtube.com"] {
   font-size: calc(var(--font-size) * 0.85);
   color: var(--foreground);
   opacity: 0.6;
-  margin-top: 5px;
+  margin-top: 10px;
+  margin-bottom: 0;
 }
 
 @media print {
