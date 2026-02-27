@@ -16,7 +16,7 @@ pagination.pagerSize = 5
   keywords = "offensive security, red team, penetration testing, security research, custom tooling"
   missingContentMessage = "Nothing here. Move along."
   missingBackButtonLabel = "Back to BLTSEC"
-  showMenuItems = 3
+  showMenuItems = 4
 
   [params.twitter]
     creator = "BLTSEC"
@@ -49,3 +49,7 @@ pagination.pagerSize = 5
         identifier = "tags"
         name = "Tags"
         url = "/tags"
+      [[languages.en.menu.main]]
+        identifier = "search"
+        name = "Search"
+        url = "/search"
