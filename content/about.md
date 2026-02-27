@@ -1,5 +1,7 @@
 ---
 title: "About"
+outputs:
+  - HTML
 ---
 
 15 years in security. Started as a programmer, stayed for the offense.
