@@ -16,7 +16,7 @@ pagination.pagerSize = 5
 [languages]
   [languages.en]
     title = "BLTSEC"
-    subtitle = ""
+    subtitle = "Offensive Security Research & Operations"
     keywords = ""
     copyright = ""
     menuMore = "Show more"
