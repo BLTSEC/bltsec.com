@@ -1,7 +1,5 @@
 ---
 title: "Search"
-outputs:
-  - HTML
 ---
 
 <link href="/pagefind/pagefind-ui.css" rel="stylesheet">
