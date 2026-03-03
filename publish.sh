@@ -53,19 +53,33 @@ draft: false
 $content"
   fi
 
-  # Convert Obsidian image embeds: ![[image.png|alt]] → ![alt](/images/posts/slug/image.png)
-  content=$(echo "$content" | sed -E "s/!\[\[([^|]+)\|([^]]+)\]\]/![\2](\/images\/posts\/$SLUG\/\1)/g")
-  # Convert Obsidian image embeds: ![[image.png]] → ![image](/images/posts/slug/image.png)
-  content=$(echo "$content" | sed -E "s/!\[\[([^]]+)\]\]/![\1](\/images\/posts\/$SLUG\/\1)/g")
+  # Convert Obsidian syntax to Hugo markdown, skipping fenced code blocks
+  echo "$content" | perl -0777 -e '
+    $slug = shift;
+    $/ = undef;
+    $content = <STDIN>;
 
-  # Convert Obsidian highlights: ==text== → <mark>text</mark>
-  content=$(echo "$content" | sed -E 's/==([^=]+)==/<mark>\1<\/mark>/g')
+    # Split by fenced code blocks (``` ... ```)
+    @parts = split(/(```[^\n]*\n.*?```)/s, $content);
 
-  # Strip [[wiki-links]] to plain text (remove brackets, keep display text)
-  content=$(echo "$content" | sed -E 's/\[\[([^|]+)\|([^]]+)\]\]/\2/g')
-  content=$(echo "$content" | sed -E 's/\[\[([^]]+)\]\]/\1/g')
+    for my $i (0 .. $#parts) {
+      # Only transform non-code-block segments (even indices)
+      if ($i % 2 == 0) {
+        # Image embeds with alt: ![[file|alt]] → ![alt](/images/posts/slug/file)
+        $parts[$i] =~ s/!\[\[([^|\]]+)\|([^\]]+)\]\]/![$2](\/images\/posts\/$slug\/$1)/g;
+        # Image embeds: ![[file]] → ![file](/images/posts/slug/file)
+        $parts[$i] =~ s/!\[\[([^\]]+)\]\]/![$1](\/images\/posts\/$slug\/$1)/g;
+        # Highlights: ==text== → <mark>text</mark>
+        $parts[$i] =~ s/==([^=]+)==/<mark>$1<\/mark>/g;
+        # Wiki links with display: [[link|display]] → display
+        $parts[$i] =~ s/\[\[([^|\]]+)\|([^\]]+)\]\]/$2/g;
+        # Wiki links: [[link]] → link
+        $parts[$i] =~ s/\[\[([^\]]+)\]\]/$1/g;
+      }
+    }
 
-  echo "$content"
+    print join("", @parts);
+  ' "$SLUG"
 }
 
 convert_markdown > "$DEST_MD"

