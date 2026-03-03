@@ -13,9 +13,6 @@
 
 {{ template "_internal/google_analytics.html" . }}
 
-<!-- Preconnect to font CDN for faster font loading -->
-<link rel="preconnect" href="https://cdn.staticdelivr.com" crossorigin>
-
 <!-- Bundle all CSS into a single file to prevent FOUC -->
 {{ $css := resources.Match "css/*.css" }}
 {{ $bundle := $css | resources.Concat "css/bundle.css" | minify | fingerprint }}
