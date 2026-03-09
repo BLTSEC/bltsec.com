@@ -1,6 +1,6 @@
 ---
 title: "NOCAP: Never Lose Scan Output Again"
-date: 2026-03-10
+date: 2026-03-09
 draft: false
 tags:
   - nocap
