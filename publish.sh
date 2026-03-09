@@ -66,9 +66,9 @@ $content"
       # Only transform non-code-block segments (even indices)
       if ($i % 2 == 0) {
         # Image embeds with alt: ![[file|alt]] → ![alt](/images/posts/slug/file)
-        $parts[$i] =~ s/!\[\[([^|\]]+)\|([^\]]+)\]\]/![$2](\/images\/posts\/$slug\/$1)/g;
+        $parts[$i] =~ s/!\[\[([^|\]]+)\|([^\]]+)\]\]/my $f=$1; $f=~s| |%20|g; "![$2](\/images\/posts\/$slug\/$f)"/ge;
         # Image embeds: ![[file]] → ![file](/images/posts/slug/file)
-        $parts[$i] =~ s/!\[\[([^\]]+)\]\]/![$1](\/images\/posts\/$slug\/$1)/g;
+        $parts[$i] =~ s/!\[\[([^\]]+)\]\]/my $f=$1; $f=~s| |%20|g; "![$f](\/images\/posts\/$slug\/$f)"/ge;
         # Highlights: ==text== → <mark>text</mark>
         $parts[$i] =~ s/==([^=]+)==/<mark>$1<\/mark>/g;
         # Wiki links with display: [[link|display]] → display

@@ -72,7 +72,7 @@ When the command finishes, NOCAP prints a one-line completion status with the ex
 
 A terminal bell fires on completion too — if you're in tmux and task-switched to another pane, you'll get notified when that long scan finishes without having to babysit it.
 
-![Pasted image 20260309160941.png](/images/posts/nocap/Pasted image 20260309160941.png)
+![cap-basic.png](/images/posts/nocap/cap-basic.png)
 *Basic capture — output routes automatically based on engagement context*
 
 ## How It Works
@@ -230,7 +230,7 @@ cap summary urls          # HTTP/HTTPS URLs
 
 The patterns aren't dumb string matches. The `passwords` pattern catches NetExec `[+] CORP\user:pass` output, hydra-style `login: ... password: ...` lines, and generic `password: value` pairs. The `hashes` pattern knows the difference between NTLM (32:32), MD5 (32 hex), SHA1 (40 hex), and SHA256 (64 hex).
 
-![Pasted image 20260309161451.png](/images/posts/nocap/Pasted image 20260309161451.png)
+![cap-summary-ports.png](/images/posts/nocap/cap-summary-ports.png)
 *Searching captures for open ports across all recon output*
 
 Want something specific? Pass any regex:
@@ -249,7 +249,7 @@ cap ls recon              # scoped to recon/
 
 If you have fzf installed, `cap ls` drops you into an interactive browser with file preview. Same philosophy as the `fzf-wordlists` alias from my [last post](https://bltsec.com/posts/operator-workflow/) — selection, not recall.
 
-![Pasted image 20260309161301.png](/images/posts/nocap/Pasted image 20260309161301.png)
+![cap-ls.png](/images/posts/nocap/cap-ls.png)
 *Interactive log browsing with file preview*
 
 ## Why It's Built This Way
