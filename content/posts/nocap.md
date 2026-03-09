@@ -56,7 +56,7 @@ No pipes. No thinking about filenames. No remembering directory structures.
 
 Every capture starts with a structured header so you always know what generated the file:
 
-```
+```bash
 Command: nmap -sCV 10.10.10.5
 Date:    Mon Mar  3 14:30:52 EST 2026
 ---
@@ -65,7 +65,7 @@ Starting Nmap 7.94 ...
 
 When the command finishes, NOCAP prints a one-line completion status with the exit code and elapsed time:
 
-```
+```bash
 [✓] nmap_sCV.txt  (12.3s)
 [✗ 1] feroxbuster_x_phphtml.txt  (0.4s)
 ```
@@ -161,7 +161,7 @@ Explicit always wins over auto. You stay in control.
 
 The engagement directory ends up looking like this:
 
-```
+```bash
 /workspace/10.10.10.5/
 ├── recon/
 │   ├── nmap_sCV.txt
@@ -210,7 +210,7 @@ This is the feature that changed how I work at the end of an engagement. `cap su
 cap summary
 ```
 
-```
+```bash
 2026-02-23 14:32  1234 lines   45.2K  recon/nmap_sCV.txt
 2026-02-23 14:28   892 lines   28.1K  recon/gobuster_dir.txt
 2026-02-23 13:55   310 lines    9.8K  loot/hashcat_m.txt
