@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VAULT_BLOG_DIR="$HOME/Documents/BLTSEC-Remote-Vault/BLTSEC/Blog"
+VAULT_BLOG_DIR="$HOME/Documents/Obsidian/BLTSEC/Blog"
 HUGO_CONTENT_DIR="$(dirname "$0")/content/posts"
 HUGO_STATIC_DIR="$(dirname "$0")/static/images/posts"
 
