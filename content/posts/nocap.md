@@ -8,8 +8,8 @@ tags:
   - tooling
   - workflow
   - pentest
-  - red-team
-  - offensive-security
+  - redteam
+  - offsec
 ---
 
 ![nocap.jpg](/images/posts/nocap/nocap.jpg)
