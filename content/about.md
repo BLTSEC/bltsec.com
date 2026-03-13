@@ -33,7 +33,7 @@ Research, tooling notes, red team techniques, vulnerability writeups, and anythi
 ## Find me
 
 - [GitHub](https://github.com/BLTSEC)
-- [YouTube](https://www.youtube.com/@0xBLTSEC)
+- [YouTube](https://www.youtube.com/@BLTSEC)
 - [X / Twitter](https://x.com/BLTSEC)
 - [LinkedIn](https://www.linkedin.com/in/bltsec/)
 - [RSS Feed](https://bltsec.com/index.xml)

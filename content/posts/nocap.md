@@ -12,8 +12,6 @@ tags:
   - offsec
 ---
 
-![nocap.jpg](/images/posts/nocap/nocap.jpg)
-
 {{< youtube tUDXFoZIkg4 >}}
 
 **Every operator has the same dirty secret: a graveyard of unsaved scan output.**
