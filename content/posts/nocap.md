@@ -14,6 +14,8 @@ tags:
 
 ![nocap.jpg](/images/posts/nocap/nocap.jpg)
 
+{{< youtube tUDXFoZIkg4 >}}
+
 **Every operator has the same dirty secret: a graveyard of unsaved scan output.**
 
 You ran NetExec against a subnet. Sprayed creds, got hits, saw `Pwn3d!` flash by. And then you realized you didn't save it. Or you used `--log` but named it something useless and now it's buried in the wrong directory alongside four other files with names you don't recognize.
