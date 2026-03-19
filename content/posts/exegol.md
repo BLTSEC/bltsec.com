@@ -9,6 +9,7 @@ tags:
   - ai
   - workflow
 ---
+![exegol_thumbnail.png](/images/posts/exegol/exegol_thumbnail.png)
 
 **Whether you're running one Kali VM across multiple HTB machines, client engagements, or exam attempts — you've probably felt the friction.** Stale tools from a bad upgrade. Shell history from three engagements ago. That one `/etc/hosts` entry you forgot to clean up before starting a new client. BackTrack and Kali served me well for fifteen years, but the single-box model wasn't built for the way modern operators actually work: concurrent engagements, strict data separation, reproducible environments, and zero tolerance for "it worked on my box."
 
