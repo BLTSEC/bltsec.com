@@ -79,9 +79,9 @@ Backdoor.Turn adds a second detection problem: the handoff lands on UDP 443, and
 
 ## What an Attacker Actually Needs
 
-Practically, TURN abuse is not one technique. Provider relay abuse and misconfigured TURN pivoting share ingredients, but the failure points are different.
+Practically, TURN abuse is not one technique. Provider relay-assisted setup/masking and misconfigured TURN pivoting share ingredients, but the failure points are different.
 
-| Need | Provider relay abuse | Misconfigured TURN pivoting |
+| Need | Provider relay-assisted setup/masking | Misconfigured TURN pivoting |
 |---|---|---|
 | Reachable relay | Legitimate provider TURN reachable from the host | Exposed or internal TURN reachable by the tester/attacker |
 | Credentials | Fresh platform-issued TURN credentials or tokens | Valid credentials, weak shared credentials, or anonymous allocation |
