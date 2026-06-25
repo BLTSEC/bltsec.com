@@ -30,11 +30,13 @@ In June 2026, [Symantec reported](https://www.security.com/threat-intelligence/d
 
 The notable tradecraft was not a strange destination or a brand-new protocol. It was Teams-associated relay infrastructure helping mask command-and-control setup and traffic patterns that many environments already permit.
 
-Symantec reported that Backdoor.Turn obtains an anonymous Teams visitor token and uses Microsoft’s TURN relay infrastructure during initial connection setup. It then establishes a QUIC session to attacker-controlled infrastructure for command and control.
+One nuance matters: Backdoor.Turn did not simply put the whole C2 channel "inside Teams." Symantec reported that the malware obtains an anonymous Teams visitor token and uses Microsoft’s TURN relay infrastructure during connection setup. After that relay-assisted setup, it establishes a direct QUIC session to attacker-controlled infrastructure for command and control.
 
-The intrusion began in December 2025. The broader DragonForce activity included the typical pre-ransomware work: persistence, bring-your-own-vulnerable-driver activity, credential access, LDAP and Active Directory reconnaissance, lateral movement, staging, and exfiltration.
+The intrusion began in December 2025. The broader DragonForce activity included the typical pre-ransomware work: persistence, bring-your-own-vulnerable-driver activity, credential access, LDAP and Active Directory reconnaissance, lateral movement, staging, exfiltration, and ransomware deployment.
 
-The important part isn’t the custom backdoor. It’s that the traffic is something most enterprises already trust.
+Symantec also reported that Backdoor.Turn was installed after the ransomware was deployed, indicating the operators may have used it for persistence, follow-on access, or resale of access. That sharpens the risk: the relay-assisted channel may not be how they first got in. It may be how they planned to come back.
+
+The important part isn’t the custom backdoor. It’s that the traffic pattern is something most enterprises already trust.
 
 ## STUN/TURN in Plain English
 
@@ -52,23 +54,36 @@ The vendor guidance explains why this traffic so often gets broad treatment:
 - [Zoom’s network firewall guidance](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0060548) documents outbound TCP 443/8801/8802 and UDP 3478, 3479, 8801-8810 for meetings and webinars.
 - Twilio’s [Network Traversal Service](https://www.twilio.com/docs/stun-turn) documentation includes TURN over TCP 443 and TCP/UDP 3478, and its [IP/port documentation](https://www.twilio.com/docs/stun-turn/regions) includes TCP 5349 and ephemeral relay UDP ports.
 
+The blind spot looks like this:
+
+![TURN and STUN relay abuse flow showing what the firewall sees versus relay-assisted setup and relay-as-channel abuse](/images/posts/turn-stun-blindspot/turn-stun-flow.svg)
+
 ## The Red Side: TURNt, Ghost Calls, and Relay Abuse
 
 Praetorian’s [Ghost Calls research](https://www.praetorian.com/blog/ghost-calls-abusing-web-conferencing-for-covert-command-control-part-2-of-2/) explains the red-team idea clearly: obtain temporary TURN credentials from a conferencing platform, use WebRTC to establish a relayed path, then run SOCKS and port-forwarding through trusted infrastructure. Their work on Zoom and Microsoft Teams became the [TURNt](https://github.com/praetorian-inc/turnt) tool.
 
+Symantec explicitly points to Ghost Calls as the inspiration for Backdoor.Turn’s mechanism. That is the red-to-real handoff that matters: a technique demonstrated in conference research is now showing up in ransomware operations.
+
+There are two related but different threat models here:
+
+- **Backdoor.Turn-style setup masking:** Teams-associated TURN infrastructure assists connection setup, then the malware establishes a direct QUIC session to attacker-controlled C2 infrastructure.
+- **TURNt/Ghost Calls-style relay-as-channel:** the TURN relay itself becomes the high-interaction SOCKS or port-forwarding path.
+
 TURNt gives operators an interactive SOCKS and port-forwarding channel over infrastructure most environments are reluctant to block. It is most useful as a **secondary, high-interaction lane** — not necessarily the primary long-term implant, but the channel turned on when an operator needs to browse internal applications, proxy tools, move data, or work around a slow primary C2 path. Globally distributed TURN infrastructure also makes blunt blocking difficult without breaking legitimate collaboration traffic.
+
+QUIC over UDP 443 deserves its own attention. If your controls focus only on the TURN ports but treat all outbound UDP 443 as normal collaboration traffic, you can miss the handoff from trusted relay setup to attacker-controlled infrastructure.
 
 ## What an Attacker Actually Needs
 
-Practically, TURN abuse needs a few conditions to line up. There are two related modes to separate: provider relay C2 smuggling, like Ghost Calls/TURNt, and misconfigured TURN pivoting, like open relay or permissive coturn abuse. Credentials matter for both. Arbitrary peer reachability matters most for pivoting.
+Practically, TURN abuse is not one technique. Provider relay smuggling and misconfigured TURN pivoting share ingredients, but the failure points are different.
 
-| Step | What they need | Difficulty |
+| Need | Provider relay C2 smuggling | Misconfigured TURN pivoting |
 |---|---|---|
-| 1 | Reachable TURN server and port | Easy |
-| 2 | Working credentials | Medium to hard |
-| 3 | Relay can reach useful peers | Often the failure point |
-| 4 | Foothold + signaling path | Required |
-| 5 | Tooling & knowledge | Easy |
+| Reachable relay | Legitimate provider TURN reachable from the host | Exposed or internal TURN reachable by the tester/attacker |
+| Credentials | Fresh platform-issued TURN credentials or tokens | Valid credentials, weak shared credentials, or anonymous allocation |
+| Relay behavior | Trusted relay path helps setup or blending | Relay allows arbitrary or dangerous peer targets |
+| Foothold/signaling | Endpoint foothold plus a way to exchange ICE/WebRTC setup | Authenticated client can route traffic through the relay |
+| Tooling | TURNt or custom WebRTC code | Stunner, StunCheck, Turner, turnproxy, or coturn utilities |
 
 Discovery can come from Shodan/Censys-style searches, internal recon after compromise, or simply watching what the real application already does. In WebRTC apps, the interesting strings are often obvious: `iceServers`, `stun:`, `turn:`, `turns:`, realms, usernames, and credential fields.
 
@@ -133,12 +148,67 @@ Network logs alone are not enough. You need correlation across firewall, DNS, pr
 | Browser or unknown binary talks to Twilio TURN outside an approved app flow | Possible shadow RTC or covert relay usage. |
 | TURN/STUN traffic from server, admin, or unmanaged hosts | Bad egress scope. These systems usually should not need meeting relays. |
 | Long-lived TCP/TLS TURN sessions | TCP fallback can be normal, but sustained interactive tunnels deserve review. |
-| High upload volume to RTC relay destinations | Exfil can hide behind meeting-like traffic patterns. |
+| Unexpected QUIC/UDP 443 from unusual processes after relay setup | Backdoor.Turn used relay-assisted setup, then QUIC to attacker C2. |
+| High upload volume to RTC relay or QUIC destinations | Exfil can hide behind meeting-like traffic patterns, but byte volume usually comes from firewall or NetFlow telemetry. |
 | Relay traffic after BYOVD, credential dumping, LDAP/AD enumeration, RDP, SMB, or internal scanning | Ransomware-chain correlation. |
 | Local SOCKS listener or unusual port-forwarding process before relay traffic | Strong operator-behavior signal. |
 | Relay allocation without meeting/call/session context | Session legitimacy failure. |
 
 For a ransomware simulation, this is the test: can the SOC tell the difference between a real meeting and an interactive tunnel hiding behind meeting infrastructure? If that question cannot be answered with telemetry, the exercise is not mature enough yet.
+
+Here is a practical Microsoft Defender for Endpoint / Sentinel hunting example using [`DeviceNetworkEvents`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table). This is a **triage query**, not proof of compromise. It asks a narrow question: what non-Teams processes are making sustained connections to Teams media/TURN ranges or UDP 443? Pair it with firewall/NetFlow for byte volume and with EDR process telemetry for BYOVD, credential dumping, LDAP enumeration, or suspicious parent process history.
+
+```kusto
+// Backdoor.Turn / Ghost Calls triage: process mismatch on Teams media/TURN egress
+// Table: DeviceNetworkEvents (Microsoft Defender for Endpoint / Sentinel)
+// Scope: process + destination + session shape. Not byte volume.
+
+// Teams media / TURN ranges from Microsoft 365 endpoint data.
+// These change. Source them from the live M365 endpoints JSON or an EDL.
+let TeamsMediaRanges = dynamic([
+    "13.107.64.0/18",
+    "52.112.0.0/14",
+    "52.122.0.0/15"
+]);
+
+// Tune this to your environment. WebView2/browser allowances are convenient,
+// but they also create blind spots for browser-based RTC and injected processes.
+let AllowedRtcProcesses = dynamic([
+    "ms-teams.exe",
+    "teams.exe",
+    "msteams.exe",
+    "msedgewebview2.exe"
+]);
+let AllowedBrowsers = dynamic([
+    "msedge.exe", "chrome.exe", "firefox.exe"
+]);
+
+DeviceNetworkEvents
+| where Timestamp > ago(7d)
+| where RemoteIPType == "Public"
+| where (RemotePort between (3478 .. 3481))
+      or (RemotePort == 443 and Protocol =~ "Udp")
+| where ipv4_is_in_any_range(RemoteIP, TeamsMediaRanges)
+| extend ProcName = tolower(InitiatingProcessFileName)
+| where ProcName !in (AllowedRtcProcesses)
+| where ProcName !in (AllowedBrowsers) // remove this line to flag browser RTC too
+| summarize
+    ConnCount      = count(),
+    FirstSeen      = min(Timestamp),
+    LastSeen       = max(Timestamp),
+    DistinctDstIPs = dcount(RemoteIP),
+    Ports          = make_set(RemotePort, 16),
+    SampleCmdLine  = any(InitiatingProcessCommandLine),
+    ProcPath       = any(InitiatingProcessFolderPath),
+    ParentProcess  = any(InitiatingProcessParentFileName),
+    Integrity      = any(InitiatingProcessIntegrityLevel)
+    by DeviceName, ProcName, InitiatingProcessAccountName
+| extend SessionSpanMin = datetime_diff('minute', LastSeen, FirstSeen)
+| where SessionSpanMin >= 5 or ConnCount >= 20
+| sort by ConnCount desc
+```
+
+Two caveats matter. First, process-name allowlists are brittle. They help find obvious mismatches, but injection, DLL sideloading, WebView2 abuse, VDI media offload, and browser-based RTC can all change what "normal" looks like. In the Symantec case, Backdoor.Turn was injected into `DbgView64.exe`; a process-mismatch query may still surface that, but a variant living inside an allowed browser or WebView host would need parent process, signer, module-load, and timeline correlation. Second, static Microsoft ranges rot. Use the live Microsoft 365 endpoint feed, an EDL, or vendor-maintained objects instead of freezing a copy in a detection rule.
 
 ## How to Test This Safely
 
@@ -158,16 +228,12 @@ That gives you a clean path: **Inventory → Baseline → Validate → Audit →
 
 Use these only in authorized environments.
 
-| Tool | Best use | Why it matters |
-|---|---|---|
-| [TURNt](https://github.com/praetorian-inc/turnt) | Covert WebRTC relay tunneling through trusted providers | Models Ghost Calls-style C2 over Teams/Zoom-like infrastructure. |
-| [Stunner](https://github.com/firefart/stunner) | TURN/STUN exploitation and relay abuse testing | Tests STUN, TURN, TURN-over-TCP, and misconfigured relay pivoting. |
-| [StunCheck](https://github.com/Pepelux/stuncheck) | Python toolkit for scanning and testing TURN/STUN | Useful for discovery, login testing, transport testing, SOCKS proxying, IP scanning, and port scanning through relays. |
-| [coturn turnutils](https://raw.githubusercontent.com/coturn/coturn/master/README.turnutils) | Baseline validation and load/testing utilities | Good for lab servers and owned infrastructure. |
-| [Trickle ICE](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/) | Quick browser validation of ICE server configs | Shows `srflx` candidates for STUN and `relay` candidates for TURN. |
-| [Nmap stun-info](https://nmap.org/nsedoc/scripts/stun-info.html) / [stun-version](https://nmap.org/nsedoc/scripts/stun-version.html) | Lightweight recon | Useful for identifying STUN services during authorized inventory. |
+- [TURNt](https://github.com/praetorian-inc/turnt) models Ghost Calls-style tunneling through trusted conferencing relay infrastructure.
+- [Stunner](https://github.com/firefart/stunner), [StunCheck](https://github.com/Pepelux/stuncheck), [Turner](https://github.com/staaldraad/turner), and [turnproxy](https://github.com/trichimtrich/turnproxy) are useful for authorized STUN/TURN discovery, credential testing, SOCKS proxying, and misconfigured relay validation.
+- [coturn turnutils](https://raw.githubusercontent.com/coturn/coturn/master/README.turnutils), [Trickle ICE](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/), and Nmap’s [stun-info](https://nmap.org/nsedoc/scripts/stun-info.html) / [stun-version](https://nmap.org/nsedoc/scripts/stun-version.html) scripts are better starting points for benign validation and owned infrastructure.
+- [Enable Security’s awesome-rtc-hacking](https://github.com/EnableSecurity/awesome-rtc-hacking) list is worth bookmarking for broader RTC/WebRTC testing references.
 
-Additional references worth knowing: [Turner](https://github.com/staaldraad/turner), [turnproxy](https://github.com/trichimtrich/turnproxy), and [Enable Security’s awesome-rtc-hacking](https://github.com/EnableSecurity/awesome-rtc-hacking) list. The standout historical case is Enable Security’s [Slack TURN research](https://www.enablesecurity.com/blog/slack-webrtc-turn-compromise-and-bug-bounty/), which showed Slack’s TURN servers could be abused to relay traffic to internal Slack network and AWS metadata services. That report predates Ghost Calls and Backdoor.Turn, but it explains the same core issue: a TURN server can become an open proxy if peer restrictions are wrong.
+The standout historical case is Enable Security’s [Slack TURN research](https://www.enablesecurity.com/blog/slack-webrtc-turn-compromise-and-bug-bounty/), which showed Slack’s TURN servers could be abused to relay traffic to internal Slack network and AWS metadata services. That report predates Ghost Calls and Backdoor.Turn, but it explains the same core issue: a TURN server can become an open proxy if peer restrictions are wrong.
 
 The theme is simple: if a relay accepts your credentials and lets you choose dangerous peers, it becomes a pivot.
 
@@ -197,9 +263,7 @@ TURN and STUN are not the enemy.
 
 Teams, Zoom, Twilio, Vonage, Agora, and every other RTC provider exist because modern networks are hostile to real-time media. NAT breaks things. Firewalls break things. Proxies break things. TURN fixes that by relaying traffic through infrastructure everyone agrees to trust.
 
-That trust is now part of the attack surface.
-
-DragonForce and Backdoor.Turn moved this from a red-team research concern into actual ransomware tradecraft. Praetorian’s TURNt shows how an operator can turn the same class of infrastructure into SOCKS and port-forwards. Stunner, StunCheck, coturn utilities, Trickle ICE, and Nmap give defenders and authorized testers ways to measure the exposure.
+Backdoor.Turn shows Ghost Calls-inspired tradecraft has crossed into real ransomware operations. In Symantec’s case, the Microsoft TURN relay assisted setup before a direct QUIC session to attacker infrastructure, and the backdoor appears to have been deployed after encryption for persistence, follow-on access, or resale. Praetorian’s TURNt shows the related relay-as-channel case, where the relay itself becomes an interactive SOCKS or port-forwarding path.
 
 The defensive answer is not panic.  
 It is precision.

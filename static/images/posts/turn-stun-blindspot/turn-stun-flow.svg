@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
+  <title id="title">TURN relay abuse flow</title>
+  <desc id="desc">Diagram showing what a firewall sees versus Backdoor.Turn relay-assisted setup and TURNt relay-as-channel abuse.</desc>
+  <defs>
+    <style>
+      .bg{fill:#11140f}.grid{stroke:#26332e;stroke-width:1;opacity:.45}.box{fill:#171d18;stroke:#2f8c96;stroke-width:3;rx:18}.box2{fill:#171d18;stroke:#e0b84d;stroke-width:3;rx:18}.box3{fill:#171d18;stroke:#b86bd8;stroke-width:3;rx:18}.txt{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fill:#f0eee6;font-size:26px}.small{font-size:20px;fill:#c9c5b8}.tiny{font-size:17px;fill:#aaa69b}.teal{fill:#38a3ad}.yellow{fill:#e0b84d}.purple{fill:#c783e8}.red{fill:#e86b6b}.line{fill:none;stroke:#38a3ad;stroke-width:5;marker-end:url(#arrow)}.line2{fill:none;stroke:#e0b84d;stroke-width:5;marker-end:url(#arrow2);stroke-dasharray:14 10}.line3{fill:none;stroke:#c783e8;stroke-width:5;marker-end:url(#arrow3)}.dash{stroke-dasharray:10 10}.note{fill:#10140f;stroke:#39423a;stroke-width:2;rx:14}
+    </style>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" class="grid"/></pattern>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#38a3ad"/></marker>
+    <marker id="arrow2" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#e0b84d"/></marker>
+    <marker id="arrow3" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#c783e8"/></marker>
+  </defs>
+  <rect width="1400" height="760" class="bg"/>
+  <rect width="1400" height="760" fill="url(#grid)" opacity=".55"/>
+  <text x="55" y="70" class="txt teal" font-size="36" font-weight="700">TRUSTED RTC EGRESS BLIND SPOT</text>
+  <text x="55" y="110" class="small">The destination looks legitimate. The process, session context, and peer behavior decide whether it is normal.</text>
+
+  <rect x="55" y="185" width="245" height="135" class="box"/>
+  <text x="85" y="230" class="txt">Endpoint</text>
+  <text x="85" y="265" class="small">Teams / browser</text>
+  <text x="85" y="295" class="small">or malware</text>
+
+  <rect x="395" y="165" width="250" height="175" class="box2"/>
+  <text x="430" y="215" class="txt yellow">Firewall</text>
+  <text x="430" y="252" class="small">sees allowed</text>
+  <text x="430" y="282" class="small">RTC / TURN / QUIC</text>
+  <text x="430" y="312" class="tiny">UDP 3478-3481, UDP 443</text>
+
+  <rect x="755" y="185" width="265" height="135" class="box"/>
+  <text x="790" y="230" class="txt">Provider TURN</text>
+  <text x="790" y="265" class="small">Teams / Zoom /</text>
+  <text x="790" y="295" class="small">Twilio relay</text>
+
+  <rect x="1095" y="105" width="250" height="135" class="box2"/>
+  <text x="1125" y="150" class="txt yellow">Backdoor.Turn</text>
+  <text x="1125" y="185" class="small">relay-assisted setup</text>
+  <text x="1125" y="215" class="small">then QUIC C2</text>
+
+  <rect x="1095" y="355" width="250" height="135" class="box3"/>
+  <text x="1125" y="400" class="txt purple">TURNt / Ghost</text>
+  <text x="1125" y="435" class="small">relay-as-channel</text>
+  <text x="1125" y="465" class="small">SOCKS / port forwards</text>
+
+  <path d="M300 252 C335 252 355 252 395 252" class="line"/>
+  <path d="M645 252 C690 252 710 252 755 252" class="line"/>
+  <path d="M1020 230 C1055 205 1070 185 1095 172" class="line2"/>
+  <path d="M1020 282 C1065 330 1068 375 1095 420" class="line3"/>
+
+  <text x="323" y="232" class="tiny teal">trusted egress</text>
+  <text x="667" y="232" class="tiny teal">legit provider</text>
+  <text x="1040" y="140" class="tiny yellow">setup cover</text>
+  <text x="1038" y="345" class="tiny purple">interactive tunnel</text>
+
+  <rect x="90" y="570" width="1220" height="105" class="note"/>
+  <text x="125" y="615" class="txt red">Detection gap:</text>
+  <text x="355" y="615" class="small">a domain/IP allow rule only proves the destination was approved.</text>
+  <text x="125" y="650" class="small">You still need process identity, meeting/session context, peer policy, QUIC visibility, and ransomware-chain correlation.</text>
+</svg>
