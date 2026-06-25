@@ -1,0 +1,2 @@
+{{ $queryHighlight := resources.Get "js/query-highlight.js" | js.Build | resources.Minify | fingerprint }}
+<script defer src="{{ $queryHighlight.RelPermalink }}" integrity="{{ $queryHighlight.Data.Integrity }}"></script>

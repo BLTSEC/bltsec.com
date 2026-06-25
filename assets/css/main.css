@@ -526,3 +526,80 @@ iframe[src*="youtube.com"] {
     display: initial;
   }
 }
+
+
+/* Query/code block polish for hunting examples */
+details {
+  margin: 1.5rem 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+
+details > summary {
+  cursor: pointer;
+  padding: 0.85rem 1rem;
+  color: var(--accent);
+  user-select: none;
+}
+
+details[open] > summary {
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+details > p {
+  padding: 0 1rem;
+}
+
+pre {
+  position: relative;
+  line-height: 1.55;
+  padding: 3.2rem 1rem 1.1rem !important;
+  background: #070b12 !important;
+  color: #d7e3f4;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+pre::before {
+  content: "CODE";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.18), rgba(45, 212, 191, 0.02));
+  color: var(--accent);
+  font-size: calc(var(--font-size) * 0.72);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+pre:has(code.language-kusto)::before {
+  content: "KQL / KUSTO";
+}
+
+pre:has(code.language-cql)::before {
+  content: "CROWDSTRIKE CQL / SPL";
+}
+
+pre code {
+  display: block;
+  white-space: pre;
+  min-width: max-content;
+}
+
+code .tok-comment { color: #7f8ea3; font-style: italic; }
+code .tok-string { color: #a7f3d0; }
+code .tok-keyword { color: #67e8f9; font-weight: 700; }
+code .tok-function { color: #fbbf24; }
+code .tok-number { color: #fca5a5; }
+code .tok-operator { color: #c084fc; font-weight: 700; }
+code .tok-field { color: #93c5fd; }
+
+@media (max-width: 684px) {
+  pre {
+    font-size: calc(var(--font-size) * 0.82) !important;
+  }
+}
