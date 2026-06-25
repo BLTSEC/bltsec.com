@@ -1,5 +1,5 @@
 ---
-title: "TURNt, STUN, and the New Blind Spot in Trusted Collaboration Traffic"
+title: "TURNt, STUN, and the Blind Spot in Trusted Collaboration Traffic"
 date: 2026-06-25
 draft: false
 tags:
@@ -24,7 +24,7 @@ That trust is the problem.
 
 In 2020, many firewall teams had to make Zoom, Teams, Twilio-backed apps, and other RTC platforms work almost overnight. The early security concern was operational: large destination ranges, UDP media paths, NAT traversal, and call quality. Business continuity won, and in many environments broad collaboration egress became normal.
 
-The uncomfortable part is that one of those trusted traffic classes is now part of the attack surface.
+The uncomfortable part is that this trusted traffic class has become a larger part of the attack surface. The concept is not new — TURN relay abuse has been showing up in WebRTC and bug bounty research for years — but Backdoor.Turn shows the pattern crossing into ransomware tradecraft.
 
 In June 2026, [Symantec reported](https://www.security.com/threat-intelligence/dragonforce-msteams-backdoor) on **Backdoor.Turn**, a custom Go-based RAT used by DragonForce during an intrusion at a major U.S. services company. [BleepingComputer covered the same case](https://www.bleepingcomputer.com/news/security/ransomware-gang-abuses-microsoft-teams-relays-to-hide-malicious-traffic/).
 
@@ -58,6 +58,8 @@ The vendor guidance explains why this traffic so often gets broad treatment:
 - [Zoom’s network firewall guidance](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0060548) documents outbound TCP 443/8801/8802 and UDP 3478, 3479, 8801-8810 for meetings and webinars.
 - Twilio’s [Network Traversal Service](https://www.twilio.com/docs/stun-turn) documentation includes TURN over TCP 443 and TCP/UDP 3478, and its [IP/port documentation](https://www.twilio.com/docs/stun-turn/regions) includes TCP 5349 and ephemeral relay UDP ports.
 
+This does not mean “decrypt all Teams” or break media flows in the name of inspection. Microsoft’s guidance is more nuanced by scenario, client, and traffic type. The defensive goal is narrower: document the exceptions, scope who and what can use them, keep logging on, and avoid turning collaboration traffic into a giant uninspected bypass.
+
 The blind spot looks like this:
 
 ![TURN and STUN relay abuse flow showing what the firewall sees versus relay-assisted setup and relay-as-channel abuse](/images/posts/turn-stun-blindspot/turn-stun-flow.svg)
@@ -68,6 +70,8 @@ Praetorian’s [Ghost Calls research](https://www.praetorian.com/blog/ghost-call
 
 Symantec explicitly points to Ghost Calls as the inspiration for Backdoor.Turn’s mechanism, and describes this as the first known in-the-wild abuse of TURN relay infrastructure for command-and-control. That is the red-to-real handoff that matters: a technique demonstrated in conference research is now showing up in ransomware operations.
 
+To be clear, TURNt was not used in the DragonForce intrusion based on the public reporting. It is relevant because it models the same technique class: abusing trusted RTC relay infrastructure that defenders are reluctant to block.
+
 There are two related but different threat models here:
 
 - **Backdoor.Turn-style setup masking:** Teams-associated TURN infrastructure assists connection setup, then the malware establishes a direct QUIC session to attacker-controlled C2 infrastructure.
@@ -75,7 +79,9 @@ There are two related but different threat models here:
 
 TURNt gives operators an interactive SOCKS and port-forwarding channel over infrastructure most environments are reluctant to block. It is most useful as a **secondary, high-interaction lane** — not necessarily the primary long-term implant, but the channel turned on when an operator needs to browse internal applications, proxy tools, move data, or work around a slow primary C2 path. Globally distributed TURN infrastructure also makes blunt blocking difficult without breaking legitimate collaboration traffic.
 
-Backdoor.Turn adds a second detection problem: the handoff lands on UDP 443, and so does much of the modern web. TURNt/Ghost Calls may remain on relay infrastructure, while Backdoor.Turn moves from relay-assisted setup to direct QUIC C2. Both cases break simple port-based trust and require destination reputation, endpoint process context, and session context.
+Backdoor.Turn also exposes a second blind spot: QUIC over UDP 443. Many organizations handle UDP 443 as generic web or media plumbing, do not send it through the same proxy controls as TCP 443, and may log only source, destination, and port. TLS inspection does not solve this because QUIC is not the same traffic path as proxied HTTPS, and blocking UDP 443 outright may break Teams, browsers, and other modern applications.
+
+TURNt/Ghost Calls may remain on relay infrastructure, while Backdoor.Turn moves from relay-assisted setup to direct QUIC C2. Both cases break simple port-based trust. The practical control is not “decrypt all Teams.” It is to inventory where UDP 443 is allowed, log it, scope it to approved apps and destinations, and hunt for unusual processes using UDP 443 after relay setup or ransomware-chain activity.
 
 ## What an Attacker Actually Needs
 
@@ -109,8 +115,8 @@ Use a policy matrix to force ownership before arguing about tools:
 
 | Provider | Who needs it? | From where? | Ports/protocols | Detection notes |
 |---|---|---|---|---|
-| Teams media/TURN | All users? Call-center only? | Managed workstations only | Microsoft-published ranges; commonly UDP 3478-3481, UDP 443, TCP 443/80 | Alert on non-Teams process and no meeting context |
-| Zoom media/TURN | Licensed Zoom users | Managed endpoints, conference rooms | Zoom-published meeting ports; commonly UDP 3478/3479/8801-8810 and TCP 443/8801/8802 | Alert on TCP fallback spikes and unusual long sessions |
+| Teams media/TURN | All users? Call-center only? | Managed workstations only | Microsoft-published ranges; commonly UDP 3478-3481, UDP 443, TCP 443/80 | Alert on unexpected process lineage, module provenance, and no meeting context |
+| Zoom media/TURN | Licensed Zoom users | Managed endpoints, conference rooms | Zoom-published meeting ports; commonly UDP 3478/3479/8801-8810 and TCP 443/8801/8802 | Alert on unexpected process lineage, TCP fallback spikes, and unusual long sessions |
 | Twilio TURN | Approved apps only | App servers or approved client groups | TCP 443, TCP/UDP 3478, TCP 5349, relay UDP ranges | Alert when random workstations use Twilio TURN |
 | Vonage / Agora / embedded RTC | Specific business app users | Only app-using groups | Vendor-published ICE/TURN ports | Ask for credential TTL and peer restrictions |
 | Self-hosted coturn | Internal apps | Required app subnets only | Your own TURN config | Deny private/link-local/metadata peers; log allocations |
@@ -133,7 +139,7 @@ The better pattern is boring: approved users, managed devices, sanctioned apps, 
 | Inspect deliberately | Decrypt where feasible, but do not assume outer TLS inspection reveals WebRTC/DTLS/SRTP. Keep no-decrypt exceptions narrow and documented. |
 | Control relay ports | Explicitly allow only required UDP/TCP 3478, TCP 5349, UDP 443/QUIC, and TCP 443 paths. Block and log the rest. |
 | Keep profiles on | Attach C2/Anti-Spyware, IPS/Vuln Protection, WildFire/sandboxing, DNS security/filtering, URL/Web Filter, AV/File Blocking where practical. |
-| Correlate endpoint | Alert when non-Teams, non-Zoom, or non-browser processes use approved RTC relay paths. |
+| Correlate endpoint | Correlate process name with parent process, signer, loaded modules, injection/sideload signals, and session context. |
 
 **Palo Alto**: Use App-ID, User-ID/device context, EDL/FQDN objects, URL categories, `application-default` where feasible, and security profiles on allow rules. [SSL Forward Proxy](https://docs.paloaltonetworks.com/network-security/decryption/administration/enabling-decryption/configure-ssl-forward-proxy) helps with outbound encrypted traffic, but it is not a magic decoder for inner WebRTC media.
 
@@ -145,10 +151,12 @@ Do not let either platform become a rubber stamp for “allow Teams/Zoom/Twilio.
 
 Network logs alone are not enough. You need correlation across firewall, DNS, proxy, EDR, identity, and collaboration telemetry.
 
+Do not make process name the whole detection. Backdoor.Turn was injected into `DbgView64.exe`, a legitimately signed utility, and adversaries can also hide inside browsers, WebView hosts, VDI media helpers, or other trusted processes. Treat process mismatch as the easy win, not the finish line. Higher-fidelity logic needs parent/child lineage, code-signing reputation, loaded modules, command line, integrity level, injection or DLL sideloading telemetry, and whether a real meeting or session exists at the same time.
+
 | Signal | Why it matters |
 |---|---|
-| Non-Teams process connects to Teams relay infrastructure | Process mismatch. The destination may be legitimate; the process is not. |
-| Non-Zoom process connects to Zoom media/TURN infrastructure | Same idea, different provider. |
+| Unexpected process context connects to Teams relay infrastructure | Process mismatch is a starter signal. Signed-process abuse, injection, or WebView hosting require lineage and module provenance. |
+| Unexpected process context connects to Zoom media/TURN infrastructure | Same idea, different provider. Validate the process tree and session context. |
 | Browser or unknown binary talks to Twilio TURN outside an approved app flow | Possible shadow RTC or covert relay usage. |
 | TURN/STUN traffic from server, admin, or unmanaged hosts | Bad egress scope. These systems usually should not need meeting relays. |
 | Long-lived TCP/TLS TURN sessions | TCP fallback can be normal, but sustained interactive tunnels deserve review. |
@@ -162,7 +170,7 @@ For a ransomware simulation, this is the test: can the SOC tell the difference b
 
 ### Cross-Platform Hunting Queries
 
-Here is a practical hunting example for Microsoft Defender for Endpoint / Sentinel using [`DeviceNetworkEvents`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table), with CrowdStrike Falcon equivalents below it. These are **triage queries**, not proof of compromise. They ask a narrow question: which non-collaboration processes are making sustained connections to Teams media/TURN ranges, including UDP 443 to Microsoft media infrastructure? Pair them with firewall/NetFlow for byte volume and with EDR process telemetry for BYOVD, credential dumping, LDAP enumeration, or suspicious parent-process history.
+Here are starter hunting artifacts for Microsoft Defender for Endpoint / Sentinel using [`DeviceNetworkEvents`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table), with CrowdStrike Falcon equivalents below. These are **triage queries**, not production detections or proof of compromise. They ask a narrow question: which non-collaboration processes are making sustained connections to Teams media/TURN ranges, including UDP 443 to Microsoft media infrastructure? Pair them with firewall/NetFlow for byte volume and with EDR process telemetry for BYOVD, credential dumping, LDAP enumeration, suspicious parent-process history, image loads, and injection or sideloading indicators.
 
 Detecting the direct Backdoor.Turn-style QUIC-to-attacker leg requires a separate hunt for unusual UDP 443 from unexpected processes to non-approved destinations, especially after relay setup or ransomware-chain activity.
 
@@ -223,7 +231,7 @@ DeviceNetworkEvents
 
 </details>
 
-Two caveats matter. First, process-name allowlists are brittle. They help find obvious mismatches, but injection, DLL sideloading, WebView2 abuse, VDI media offload, and browser-based RTC can all change what "normal" looks like. In the Symantec case, Backdoor.Turn was injected into `DbgView64.exe`; a process-mismatch query may still surface that, but a variant living inside an allowed browser or WebView host would need parent process, signer, module-load, and timeline correlation. Second, static Microsoft ranges rot. Use the live Microsoft 365 endpoint feed, an EDL, or vendor-maintained objects instead of freezing a copy in a detection rule.
+Two caveats matter. First, process-name allowlists are brittle. They help find obvious mismatches, but injection, DLL sideloading, WebView2 abuse, VDI media offload, and browser-based RTC can all change what “normal” looks like. Public reporting described Backdoor.Turn being injected into `DbgView64.exe`, a legitimate signed utility; a simple “not Teams” hunt may flag that exact case, but an operator living in an allowed browser, WebView host, or VDI media helper can bypass it. Treat the query as starter logic and pivot into parent process, signer, module-load, injection/DLL sideloading, integrity level, and timeline correlation. Second, static Microsoft ranges rot. Use the live Microsoft 365 endpoint feed, an EDL, or vendor-maintained objects instead of freezing a copy in a detection rule.
 
 <details>
 <summary><strong>CrowdStrike Falcon — NG-SIEM/LogScale (CQL) and legacy Event Search (SPL)</strong></summary>
@@ -323,7 +331,7 @@ TURN and STUN are not the enemy.
 
 Teams, Zoom, Twilio, Vonage, Agora, and every other RTC provider exist because modern networks are hostile to real-time media. NAT breaks things. Firewalls break things. Proxies break things. TURN fixes that by relaying traffic through infrastructure everyone agrees to trust.
 
-Backdoor.Turn shows Ghost Calls-inspired tradecraft has crossed into real ransomware operations. In Symantec’s case, the Microsoft TURN relay assisted setup before a direct QUIC session to attacker infrastructure, and the backdoor appears to have been deployed after encryption for persistence, follow-on access, or resale. Praetorian’s TURNt shows the related relay-as-channel case, where the relay itself becomes an interactive SOCKS or port-forwarding path.
+TURN relay abuse is not new. Enable Security’s Slack research and Praetorian’s Ghost Calls/TURNt showed the class already. What changed with Backdoor.Turn is the in-the-wild ransomware validation. In Symantec’s case, the Microsoft TURN relay assisted setup before a direct QUIC session to attacker infrastructure, and the backdoor appears to have been deployed after encryption for persistence, follow-on access, or resale. Praetorian’s TURNt shows the related relay-as-channel case, where the relay itself becomes an interactive SOCKS or port-forwarding path.
 
 The defensive answer is not panic.  
 It is precision.
