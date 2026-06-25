@@ -32,7 +32,11 @@ The notable tradecraft was not a strange destination or a brand-new protocol. It
 
 One nuance matters: Backdoor.Turn did not simply put the whole C2 channel "inside Teams." Symantec reported that the malware obtains an anonymous Teams visitor token and uses Microsoft’s TURN relay infrastructure during connection setup. After that relay-assisted setup, it establishes a direct QUIC session to attacker-controlled infrastructure for command and control.
 
-The intrusion began in December 2025. The broader DragonForce activity included the typical pre-ransomware work: persistence, bring-your-own-vulnerable-driver activity, credential access, LDAP and Active Directory reconnaissance, lateral movement, staging, exfiltration, and ransomware deployment.
+Why bother with the relay at all if the channel ends up direct? Because the value is in the setup, not the transport. The implant’s first network activity looks like a Teams client negotiating media — anonymous visitor token, STUN/TURN ports, Microsoft destination IPs — so the controls that watch for a new process making first contact with an unfamiliar host see Microsoft, not an attacker.
+
+Symantec is blunt about the payoff: to network defenders, the only traffic they could see was outbound connections to legitimate Microsoft Teams servers. By the time the QUIC session opens, the riskiest detection moment is already spent looking like a meeting.
+
+The intrusion began in December 2025, and the operators dwelled on the victim network for roughly one to two months before discovery. The broader DragonForce activity included the typical pre-ransomware work: persistence, bring-your-own-vulnerable-driver activity, credential access, LDAP and Active Directory reconnaissance, lateral movement, staging, exfiltration, and ransomware deployment.
 
 Symantec also reported that Backdoor.Turn was installed after the ransomware was deployed, indicating the operators may have used it for persistence, follow-on access, or resale of access. That sharpens the risk: the relay-assisted channel may not be how they first got in. It may be how they planned to come back.
 
@@ -62,7 +66,7 @@ The blind spot looks like this:
 
 Praetorian’s [Ghost Calls research](https://www.praetorian.com/blog/ghost-calls-abusing-web-conferencing-for-covert-command-control-part-2-of-2/) explains the red-team idea clearly: obtain temporary TURN credentials from a conferencing platform, use WebRTC to establish a relayed path, then run SOCKS and port-forwarding through trusted infrastructure. Their work on Zoom and Microsoft Teams became the [TURNt](https://github.com/praetorian-inc/turnt) tool.
 
-Symantec explicitly points to Ghost Calls as the inspiration for Backdoor.Turn’s mechanism. That is the red-to-real handoff that matters: a technique demonstrated in conference research is now showing up in ransomware operations.
+Symantec explicitly points to Ghost Calls as the inspiration for Backdoor.Turn’s mechanism, and describes this as the first known in-the-wild abuse of TURN relay infrastructure for command-and-control. That is the red-to-real handoff that matters: a technique demonstrated in conference research is now showing up in ransomware operations.
 
 There are two related but different threat models here:
 
@@ -71,19 +75,19 @@ There are two related but different threat models here:
 
 TURNt gives operators an interactive SOCKS and port-forwarding channel over infrastructure most environments are reluctant to block. It is most useful as a **secondary, high-interaction lane** — not necessarily the primary long-term implant, but the channel turned on when an operator needs to browse internal applications, proxy tools, move data, or work around a slow primary C2 path. Globally distributed TURN infrastructure also makes blunt blocking difficult without breaking legitimate collaboration traffic.
 
-QUIC over UDP 443 deserves its own attention. If your controls focus only on the TURN ports but treat all outbound UDP 443 as normal collaboration traffic, you can miss the handoff from trusted relay setup to attacker-controlled infrastructure.
+Backdoor.Turn adds a second detection problem: the handoff lands on UDP 443, and so does much of the modern web. TURNt/Ghost Calls may remain on relay infrastructure, while Backdoor.Turn moves from relay-assisted setup to direct QUIC C2. Both cases break simple port-based trust and require destination reputation, endpoint process context, and session context.
 
 ## What an Attacker Actually Needs
 
-Practically, TURN abuse is not one technique. Provider relay smuggling and misconfigured TURN pivoting share ingredients, but the failure points are different.
+Practically, TURN abuse is not one technique. Provider relay abuse and misconfigured TURN pivoting share ingredients, but the failure points are different.
 
-| Need | Provider relay C2 smuggling | Misconfigured TURN pivoting |
+| Need | Provider relay abuse | Misconfigured TURN pivoting |
 |---|---|---|
 | Reachable relay | Legitimate provider TURN reachable from the host | Exposed or internal TURN reachable by the tester/attacker |
 | Credentials | Fresh platform-issued TURN credentials or tokens | Valid credentials, weak shared credentials, or anonymous allocation |
 | Relay behavior | Trusted relay path helps setup or blending | Relay allows arbitrary or dangerous peer targets |
 | Foothold/signaling | Endpoint foothold plus a way to exchange ICE/WebRTC setup | Authenticated client can route traffic through the relay |
-| Tooling | TURNt or custom WebRTC code | Stunner, StunCheck, Turner, turnproxy, or coturn utilities |
+| Tooling | TURNt or custom WebRTC code | Stunner, StunCheck, Turner, or coturn utilities |
 
 Discovery can come from Shodan/Censys-style searches, internal recon after compromise, or simply watching what the real application already does. In WebRTC apps, the interesting strings are often obvious: `iceServers`, `stun:`, `turn:`, `turns:`, realms, usernames, and credential fields.
 
@@ -158,9 +162,12 @@ For a ransomware simulation, this is the test: can the SOC tell the difference b
 
 ### Cross-Platform Hunting Queries
 
-Here is a practical Microsoft Defender for Endpoint / Sentinel hunting example using [`DeviceNetworkEvents`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table). This is a **triage query**, not proof of compromise. It asks a narrow question: what non-Teams processes are making sustained connections to Teams media/TURN ranges, including UDP 443 to Microsoft media infrastructure? Pair it with firewall/NetFlow for byte volume and with EDR process telemetry for BYOVD, credential dumping, LDAP enumeration, or suspicious parent process history.
+Here is a practical hunting example for Microsoft Defender for Endpoint / Sentinel using [`DeviceNetworkEvents`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table), with CrowdStrike Falcon equivalents below it. These are **triage queries**, not proof of compromise. They ask a narrow question: which non-collaboration processes are making sustained connections to Teams media/TURN ranges, including UDP 443 to Microsoft media infrastructure? Pair them with firewall/NetFlow for byte volume and with EDR process telemetry for BYOVD, credential dumping, LDAP enumeration, or suspicious parent-process history.
 
 Detecting the direct Backdoor.Turn-style QUIC-to-attacker leg requires a separate hunt for unusual UDP 443 from unexpected processes to non-approved destinations, especially after relay setup or ransomware-chain activity.
+
+<details>
+<summary><strong>Microsoft Defender for Endpoint / Sentinel — KQL (<code>DeviceNetworkEvents</code>)</strong></summary>
 
 ```kusto
 // Backdoor.Turn / Ghost Calls triage: process mismatch on Teams media/TURN egress
@@ -214,81 +221,51 @@ DeviceNetworkEvents
 | sort by ConnCount desc
 ```
 
+</details>
+
 Two caveats matter. First, process-name allowlists are brittle. They help find obvious mismatches, but injection, DLL sideloading, WebView2 abuse, VDI media offload, and browser-based RTC can all change what "normal" looks like. In the Symantec case, Backdoor.Turn was injected into `DbgView64.exe`; a process-mismatch query may still surface that, but a variant living inside an allowed browser or WebView host would need parent process, signer, module-load, and timeline correlation. Second, static Microsoft ranges rot. Use the live Microsoft 365 endpoint feed, an EDL, or vendor-maintained objects instead of freezing a copy in a detection rule.
 
 <details>
-<summary><strong>CrowdStrike Falcon starting points (validate in your tenant)</strong></summary>
+<summary><strong>CrowdStrike Falcon — NG-SIEM/LogScale (CQL) and legacy Event Search (SPL)</strong></summary>
 
-<p>The same triage signal applies in Falcon-heavy environments: non-collaboration processes talking to RTC/TURN ports and provider ranges, with session-shape and kill-chain correlation. Field names and function support vary between Falcon NG-SIEM / LogScale and legacy Event Search, so treat this as hunting logic to validate, not a universal copy-paste alert.</p>
+<p>The same triage signal applies in Falcon-heavy environments: a non-collaboration process talking to RTC/TURN ports and provider ranges, judged by session shape and kill-chain context. Falcon's <code>NetworkConnectIP4</code> is for process attribution, not authoritative volume, so pull exfil byte counts from firewall or NetFlow. Field names and function support vary by version, so validate the protocol value (17 = UDP), the RemotePort type (number vs <code>*_decimal</code>), and multi-subnet <code>cidr()</code> support before relying on either query.</p>
 
-<pre><code class="language-cql">// =============================================================================
-// Backdoor.Turn / Ghost Calls detection — CrowdStrike Falcon
-// Same logic as the MDE/KQL version: destination is legitimate Teams media/TURN;
-// the PROCESS making the call is not Teams.
-//
-// EDR scope note: Falcon&#x27;s NetworkConnectIP4 is for PROCESS ATTRIBUTION, not
-// authoritative network volume. UDP media is deduped/throttled and there are no
-// reliable byte counts here. Get exfil-volume from firewall/NetFlow; use Falcon
-// for &quot;which binary + what behavior preceded it.&quot;
-//
-// Validate against YOUR tenant: Protocol field representation (17=UDP), RemotePort
-// type (number vs *_decimal), and cidr() multi-subnet support by version.
-// =============================================================================
+<pre><code class="language-cql">// Backdoor.Turn / Ghost Calls triage — CrowdStrike Falcon
+// Destination is legitimate Teams media/TURN; the calling process is not Teams.
 
-
-// -----------------------------------------------------------------------------
 // (A) NG-SIEM / LogScale — CQL  (repository: search-all)
-// -----------------------------------------------------------------------------
 #event_simpleName=NetworkConnectIP4
-| in(RemotePort, values=[3478, 3479, 3480, 3481])
-   OR (RemotePort=443 AND Protocol=17)            // 17 = UDP  (QUIC / media egress)
-// Teams media / TURN ranges — SOURCE THESE FROM LIVE M365 ENDPOINTS, they rot
-| cidr(RemoteAddressIP4, subnet=[&quot;13.107.64.0/18&quot;, &quot;52.112.0.0/14&quot;, &quot;52.122.0.0/15&quot;])
-// attach the initiating process image
+// 17 = UDP (QUIC / media egress)
+| RemotePort=3478 OR RemotePort=3479 OR RemotePort=3480 OR RemotePort=3481 OR (RemotePort=443 AND Protocol=17)
+// Teams media / TURN ranges — source these from live M365 endpoints; they rot.
+| cidr(RemoteAddressIP4, subnet=["13.107.64.0/18", "52.112.0.0/14", "52.122.0.0/15"])
 | join({#event_simpleName=ProcessRollup2}, key=ContextProcessId, field=TargetProcessId,
         include=[ImageFileName, CommandLine])
-// drop legitimate RTC binaries (basename match). NOTE: msedgewebview2.exe also hosts
-// half of Electron — leaving it allowlisted is a real blind spot. See caveat below.
+// drop legitimate RTC binaries; msedgewebview2.exe also hosts Electron apps, so it is itself a blind spot
 | ImageFileName != /\\(ms-teams|teams|msteams|msedgewebview2)\.exe$/i
-// session shape: one STUN probe is noise; sustained/chatty non-Teams relay is signal
+// session shape: one STUN probe is noise; sustained non-Teams relay is signal
 | groupBy([aid, ComputerName, ImageFileName],
           function=[count(as=ConnCount), collect([RemoteAddressIP4, RemotePort, CommandLine])])
 | ConnCount &gt;= 20
 | sort(ConnCount, order=desc)
 
 
-// -----------------------------------------------------------------------------
-// (B) Legacy Event Search — SPL  (for tenants not yet on NG-SIEM)
-// -----------------------------------------------------------------------------
+// (B) Legacy Event Search — SPL  (tenants not yet on NG-SIEM)
 event_simpleName=NetworkConnectIP4
   (RemotePort_decimal=3478 OR RemotePort_decimal=3479 OR RemotePort_decimal=3480
-   OR RemotePort_decimal=3481 OR (RemotePort_decimal=443 AND Protocol=17))
-| where cidrmatch(&quot;13.107.64.0/18&quot;, RemoteIP)
-     OR cidrmatch(&quot;52.112.0.0/14&quot;, RemoteIP)
-     OR cidrmatch(&quot;52.122.0.0/15&quot;, RemoteIP)
+   OR RemotePort_decimal=3481 OR (RemotePort_decimal=443 AND Protocol_decimal=17))
+| where cidrmatch("13.107.64.0/18", RemoteIP)
+     OR cidrmatch("52.112.0.0/14", RemoteIP)
+     OR cidrmatch("52.122.0.0/15", RemoteIP)
 | rename ContextProcessId_decimal as TargetProcessId_decimal
 | join aid TargetProcessId_decimal
     [ search event_simpleName=ProcessRollup2
       | fields aid TargetProcessId_decimal ImageFileName CommandLine ]
-| regex ImageFileName!=&quot;(?i)\\\\(ms-teams|teams|msteams|msedgewebview2)\.exe$&quot;
+| regex ImageFileName!="(?i)\\\\(ms-teams|teams|msteams|msedgewebview2)\.exe$"
 | stats count AS ConnCount values(RemoteIP) AS dst values(RemotePort_decimal) AS ports
         values(CommandLine) AS cmd by aid ComputerName ImageFileName
 | where ConnCount &gt;= 20
 | sort - ConnCount
-
-
-// -----------------------------------------------------------------------------
-// CAVEATS (same as the KQL build — restate in the post so it isn&#x27;t oversold):
-//   1. This is a TRIAGE QUEUE, not a page-worthy alert. It fires on any non-Teams
-//      binary in Teams ranges, which legitimately includes VDI/RTC media offload
-//      and Electron apps. Fidelity comes from correlating with the kill chain.
-//   2. Process-name allowlisting LOSES to injection. Backdoor.Turn ran inside
-//      DbgView64.exe — a perfect binary allowlist never sees it. Add parent-process
-//      / module-load / integrity context (ProcessRollup2 ParentBaseFileName,
-//      ImageLoad of DLLs into signed RTC-adjacent hosts) to catch the injected case.
-//   3. IP ranges are static here and WILL go stale. Pull from the live M365
-//      endpoints JSON or a scheduled lookup, don&#x27;t ship this list as gospel.
-// -----------------------------------------------------------------------------
 </code></pre>
 
 </details>
@@ -312,7 +289,7 @@ That gives you a clean path: **Inventory → Baseline → Validate → Audit →
 Use these only in authorized environments.
 
 - [TURNt](https://github.com/praetorian-inc/turnt) models Ghost Calls-style tunneling through trusted conferencing relay infrastructure.
-- [Stunner](https://github.com/firefart/stunner), [StunCheck](https://github.com/Pepelux/stuncheck), [Turner](https://github.com/staaldraad/turner), and [turnproxy](https://github.com/trichimtrich/turnproxy) are useful for authorized STUN/TURN discovery, credential testing, SOCKS proxying, and misconfigured relay validation.
+- [Stunner](https://github.com/firefart/stunner), [StunCheck](https://github.com/Pepelux/stuncheck), and [Turner](https://github.com/staaldraad/turner) are useful for authorized STUN/TURN discovery, credential testing, SOCKS proxying, and misconfigured relay validation.
 - [coturn turnutils](https://raw.githubusercontent.com/coturn/coturn/master/README.turnutils), [Trickle ICE](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/), and Nmap’s [stun-info](https://nmap.org/nsedoc/scripts/stun-info.html) / [stun-version](https://nmap.org/nsedoc/scripts/stun-version.html) scripts are better starting points for benign validation and owned infrastructure.
 - [Enable Security’s awesome-rtc-hacking](https://github.com/EnableSecurity/awesome-rtc-hacking) list is worth bookmarking for broader RTC/WebRTC testing references.
 
