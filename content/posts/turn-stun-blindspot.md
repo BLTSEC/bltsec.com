@@ -8,19 +8,17 @@ tags:
   - webrtc
   - teams
   - zoom
-  - paloalto
-  - fortinet
   - ransomware
   - redteam
-  - detection
   - c2
-description: "STUN and TURN make Teams, Zoom, Twilio, and other RTC platforms work through NAT, but broad trusted relay egress can become a C2 blind spot for defenders."
 ---
 ![TURNt, STUN, and trusted collaboration traffic blind spot banner](/images/posts/turn-stun-blindspot/turn_down_for_what.png)
 
 **What if your trusted collaboration traffic is also a C2 blind spot?**
 
 Collaboration traffic has long been one of those firewall exceptions everyone understands. Users need calls to work. UDP has to get out. Vendor ranges change. TLS inspection breaks things. So the rule gets written, the proxy bypass goes in, and the traffic becomes trusted.
+
+<!--more-->
 
 That trust is the problem.
 
