@@ -156,7 +156,11 @@ Network logs alone are not enough. You need correlation across firewall, DNS, pr
 
 For a ransomware simulation, this is the test: can the SOC tell the difference between a real meeting and an interactive tunnel hiding behind meeting infrastructure? If that question cannot be answered with telemetry, the exercise is not mature enough yet.
 
-Here is a practical Microsoft Defender for Endpoint / Sentinel hunting example using [`DeviceNetworkEvents`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table). This is a **triage query**, not proof of compromise. It asks a narrow question: what non-Teams processes are making sustained connections to Teams media/TURN ranges or UDP 443? Pair it with firewall/NetFlow for byte volume and with EDR process telemetry for BYOVD, credential dumping, LDAP enumeration, or suspicious parent process history.
+### Cross-Platform Hunting Queries
+
+Here is a practical Microsoft Defender for Endpoint / Sentinel hunting example using [`DeviceNetworkEvents`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table). This is a **triage query**, not proof of compromise. It asks a narrow question: what non-Teams processes are making sustained connections to Teams media/TURN ranges, including UDP 443 to Microsoft media infrastructure? Pair it with firewall/NetFlow for byte volume and with EDR process telemetry for BYOVD, credential dumping, LDAP enumeration, or suspicious parent process history.
+
+Detecting the direct Backdoor.Turn-style QUIC-to-attacker leg requires a separate hunt for unusual UDP 443 from unexpected processes to non-approved destinations, especially after relay setup or ransomware-chain activity.
 
 ```kusto
 // Backdoor.Turn / Ghost Calls triage: process mismatch on Teams media/TURN egress
@@ -186,6 +190,8 @@ let AllowedBrowsers = dynamic([
 DeviceNetworkEvents
 | where Timestamp > ago(7d)
 | where RemoteIPType == "Public"
+// Teams media/TURN ports, including UDP 443 to Microsoft media infrastructure.
+// The direct QUIC-to-attacker C2 leg needs a separate hunt against non-approved destinations.
 | where (RemotePort between (3478 .. 3481))
       or (RemotePort == 443 and Protocol =~ "Udp")
 | where ipv4_is_in_any_range(RemoteIP, TeamsMediaRanges)
@@ -209,6 +215,83 @@ DeviceNetworkEvents
 ```
 
 Two caveats matter. First, process-name allowlists are brittle. They help find obvious mismatches, but injection, DLL sideloading, WebView2 abuse, VDI media offload, and browser-based RTC can all change what "normal" looks like. In the Symantec case, Backdoor.Turn was injected into `DbgView64.exe`; a process-mismatch query may still surface that, but a variant living inside an allowed browser or WebView host would need parent process, signer, module-load, and timeline correlation. Second, static Microsoft ranges rot. Use the live Microsoft 365 endpoint feed, an EDL, or vendor-maintained objects instead of freezing a copy in a detection rule.
+
+<details>
+<summary><strong>CrowdStrike Falcon starting points (validate in your tenant)</strong></summary>
+
+<p>The same triage signal applies in Falcon-heavy environments: non-collaboration processes talking to RTC/TURN ports and provider ranges, with session-shape and kill-chain correlation. Field names and function support vary between Falcon NG-SIEM / LogScale and legacy Event Search, so treat this as hunting logic to validate, not a universal copy-paste alert.</p>
+
+<pre><code class="language-cql">// =============================================================================
+// Backdoor.Turn / Ghost Calls detection — CrowdStrike Falcon
+// Same logic as the MDE/KQL version: destination is legitimate Teams media/TURN;
+// the PROCESS making the call is not Teams.
+//
+// EDR scope note: Falcon&#x27;s NetworkConnectIP4 is for PROCESS ATTRIBUTION, not
+// authoritative network volume. UDP media is deduped/throttled and there are no
+// reliable byte counts here. Get exfil-volume from firewall/NetFlow; use Falcon
+// for &quot;which binary + what behavior preceded it.&quot;
+//
+// Validate against YOUR tenant: Protocol field representation (17=UDP), RemotePort
+// type (number vs *_decimal), and cidr() multi-subnet support by version.
+// =============================================================================
+
+
+// -----------------------------------------------------------------------------
+// (A) NG-SIEM / LogScale — CQL  (repository: search-all)
+// -----------------------------------------------------------------------------
+#event_simpleName=NetworkConnectIP4
+| in(RemotePort, values=[3478, 3479, 3480, 3481])
+   OR (RemotePort=443 AND Protocol=17)            // 17 = UDP  (QUIC / media egress)
+// Teams media / TURN ranges — SOURCE THESE FROM LIVE M365 ENDPOINTS, they rot
+| cidr(RemoteAddressIP4, subnet=[&quot;13.107.64.0/18&quot;, &quot;52.112.0.0/14&quot;, &quot;52.122.0.0/15&quot;])
+// attach the initiating process image
+| join({#event_simpleName=ProcessRollup2}, key=ContextProcessId, field=TargetProcessId,
+        include=[ImageFileName, CommandLine])
+// drop legitimate RTC binaries (basename match). NOTE: msedgewebview2.exe also hosts
+// half of Electron — leaving it allowlisted is a real blind spot. See caveat below.
+| ImageFileName != /\\(ms-teams|teams|msteams|msedgewebview2)\.exe$/i
+// session shape: one STUN probe is noise; sustained/chatty non-Teams relay is signal
+| groupBy([aid, ComputerName, ImageFileName],
+          function=[count(as=ConnCount), collect([RemoteAddressIP4, RemotePort, CommandLine])])
+| ConnCount &gt;= 20
+| sort(ConnCount, order=desc)
+
+
+// -----------------------------------------------------------------------------
+// (B) Legacy Event Search — SPL  (for tenants not yet on NG-SIEM)
+// -----------------------------------------------------------------------------
+event_simpleName=NetworkConnectIP4
+  (RemotePort_decimal=3478 OR RemotePort_decimal=3479 OR RemotePort_decimal=3480
+   OR RemotePort_decimal=3481 OR (RemotePort_decimal=443 AND Protocol=17))
+| where cidrmatch(&quot;13.107.64.0/18&quot;, RemoteIP)
+     OR cidrmatch(&quot;52.112.0.0/14&quot;, RemoteIP)
+     OR cidrmatch(&quot;52.122.0.0/15&quot;, RemoteIP)
+| rename ContextProcessId_decimal as TargetProcessId_decimal
+| join aid TargetProcessId_decimal
+    [ search event_simpleName=ProcessRollup2
+      | fields aid TargetProcessId_decimal ImageFileName CommandLine ]
+| regex ImageFileName!=&quot;(?i)\\\\(ms-teams|teams|msteams|msedgewebview2)\.exe$&quot;
+| stats count AS ConnCount values(RemoteIP) AS dst values(RemotePort_decimal) AS ports
+        values(CommandLine) AS cmd by aid ComputerName ImageFileName
+| where ConnCount &gt;= 20
+| sort - ConnCount
+
+
+// -----------------------------------------------------------------------------
+// CAVEATS (same as the KQL build — restate in the post so it isn&#x27;t oversold):
+//   1. This is a TRIAGE QUEUE, not a page-worthy alert. It fires on any non-Teams
+//      binary in Teams ranges, which legitimately includes VDI/RTC media offload
+//      and Electron apps. Fidelity comes from correlating with the kill chain.
+//   2. Process-name allowlisting LOSES to injection. Backdoor.Turn ran inside
+//      DbgView64.exe — a perfect binary allowlist never sees it. Add parent-process
+//      / module-load / integrity context (ProcessRollup2 ParentBaseFileName,
+//      ImageLoad of DLLs into signed RTC-adjacent hosts) to catch the injected case.
+//   3. IP ranges are static here and WILL go stale. Pull from the live M365
+//      endpoints JSON or a scheduled lookup, don&#x27;t ship this list as gospel.
+// -----------------------------------------------------------------------------
+</code></pre>
+
+</details>
 
 ## How to Test This Safely
 
